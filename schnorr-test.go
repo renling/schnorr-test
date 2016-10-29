@@ -1,14 +1,12 @@
 package main
 
-// copied from bford/golang-x-crypto/ed25519/cosi/example_test.go
-
 import (
 	"fmt"
 	"github.com/bford/golang-x-crypto/ed25519"
 	"github.com/bford/golang-x-crypto/ed25519/cosi"
 )
 
-func main() {    
+func main() {
 	pubKey1, priKey1, _ := ed25519.GenerateKey(nil)
 	pubKey2, priKey2, _ := ed25519.GenerateKey(nil)
 	pubKeys := []ed25519.PublicKey{pubKey1, pubKey2}
