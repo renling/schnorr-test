@@ -7,39 +7,49 @@ import (
 )
 
 func main() {
-	pubKey1, priKey1, _ := ed25519.GenerateKey(nil)
-	pubKey2, priKey2, _ := ed25519.GenerateKey(nil)
-	pubKeys := []ed25519.PublicKey{pubKey1, pubKey2}
+	N := 100;
+	pubKeys := make([]ed25519.PublicKey, N)
+	priKeys := make([]ed25519.PrivateKey, N)
+	for i := 0; i < N; i++ {
+		pubKeys[i], priKeys[i], _ = ed25519.GenerateKey(nil)
+	}
+
+	cosigners := cosi.NewCosigners(pubKeys, nil)
+	cosigners.SetMaskBit(1, cosi.Disabled)
+	cosigners.SetPolicy( cosi.ThresholdPolicy(N/2) )
 
 	// Sign a test message.
 	message := []byte("Hello World")
-	sig := Sign(message, pubKeys, priKey1, priKey2)
+	sig := Sign(message, cosigners, priKeys)
     fmt.Printf("signature: %v\n", sig)
 
 	// Now verify the resulting collective signature.
 	// This can be done by anyone any time, not just the leader.
-	valid := cosi.Verify(pubKeys, nil, message, sig)
+	valid := cosigners.Verify(message, sig)
 	fmt.Printf("signature valid: %v\n", valid)
 }
 
-func Sign(message []byte, pubKeys []ed25519.PublicKey, priKey1, priKey2 ed25519.PrivateKey) []byte {
+func Sign(message []byte, cosigners *cosi.Cosigners, priKeys []ed25519.PrivateKey) []byte {
+	N := len(priKeys)
 
 	// Each cosigner first needs to produce a per-message commit.
-	commit1, secret1, _ := cosi.Commit(nil)
-	commit2, secret2, _ := cosi.Commit(nil)
-	commits := []cosi.Commitment{commit1, commit2}
+	commits := make([]cosi.Commitment, N)
+	secrets := make([]*cosi.Secret, N)
+	for i := 0; i < N; i++ {
+		commits[i], secrets[i], _ = cosi.Commit(nil)
+	}
 
-	// The leader then combines these into an aggregate commit.
-	cosigners := cosi.NewCosigners(pubKeys, nil)
+	// The leader then aggregate public keys and commit.
 	aggregatePublicKey := cosigners.AggregatePublicKey()
 	aggregateCommit := cosigners.AggregateCommit(commits)
 
 	// The cosigners now produce their parts of the collective signature.
-	sigPart1 := cosi.Cosign(priKey1, secret1, message, aggregatePublicKey, aggregateCommit)
-	sigPart2 := cosi.Cosign(priKey2, secret2, message, aggregatePublicKey, aggregateCommit)
-	sigParts := []cosi.SignaturePart{sigPart1, sigPart2}
+	sigParts := make([]cosi.SignaturePart, N)
+	for i := 0; i < N; i++ {
+		sigParts[i] = cosi.Cosign(priKeys[i], secrets[i], message, aggregatePublicKey, aggregateCommit)
+	}
 
-	// Finally, the leader combines the two signature parts
+	// Finally, the leader combines the  signature parts
 	// into a final collective signature.
 	sig := cosigners.AggregateSignature(aggregateCommit, sigParts)
 
